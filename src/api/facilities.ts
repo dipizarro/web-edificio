@@ -22,3 +22,33 @@ export async function getFacilityById(communityId: string, facilityId: string): 
     const response = await api.get(`/api/communities/${communityId}/facilities/${facilityId}`);
     return response.data;
 }
+
+export interface AvailabilitySlotDto {
+    startAtUtc: string;
+    endAtUtc: string;
+    status: "Free" | "Pending" | "Booked" | "Blocked";
+    reasonOrStatus: string;
+    bookingId?: string;
+    blockId?: string;
+}
+
+export interface FacilityAvailabilitySlotsResponse {
+    communityId: string;
+    facilityId: string;
+    fromUtc: string;
+    toUtc: string;
+    slotMinutes: number;
+    slots: AvailabilitySlotDto[];
+}
+
+export async function getFacilityAvailabilitySlots(
+    communityId: string,
+    facilityId: string,
+    fromUtc: string,
+    toUtc: string
+): Promise<FacilityAvailabilitySlotsResponse> {
+    const response = await api.get(`/api/communities/${communityId}/facilities/${facilityId}/availability/slots`, {
+        params: { from: fromUtc, to: toUtc }
+    });
+    return response.data;
+}
