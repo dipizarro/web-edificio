@@ -1,15 +1,18 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
+import { hasRole } from "@/auth/authStore";
 import { getFacilityById, getFacilityAvailabilitySlots } from "@/api/facilities";
 import type { AvailabilitySlotDto } from "@/api/facilities";
+import { createFacilityBooking } from "@/api/bookings";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const getLocalYYYYMMDD = (d: Date) => {
     const year = d.getFullYear();
@@ -24,11 +27,16 @@ const formatTime = (utcStr: string) => {
 
 export default function FacilityDetailPage() {
     const { facilityId } = useParams();
-    const { communityId } = useAuth();
+    const auth = useAuth();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const [selectedDateStr, setSelectedDateStr] = useState<string>(getLocalYYYYMMDD(new Date()));
     const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
+    const [notes, setNotes] = useState("");
+    const [adminUnitId, setAdminUnitId] = useState("");
+
+    const isAdminOrCommittee = hasRole(auth, "Admin") || hasRole(auth, "Committee");
 
     const fromUtc = useMemo(() => {
         const d = new Date(`${selectedDateStr}T00:00:00`);
@@ -41,21 +49,54 @@ export default function FacilityDetailPage() {
     }, [selectedDateStr]);
 
     const { data: facility, isLoading: isLoadingFacility, isError: isErrorFacility } = useQuery({
-        queryKey: ["facility", communityId, facilityId],
-        queryFn: () => getFacilityById(communityId!, facilityId!),
-        enabled: !!communityId && !!facilityId,
+        queryKey: ["facility", auth.communityId, facilityId],
+        queryFn: () => getFacilityById(auth.communityId!, facilityId!),
+        enabled: !!auth.communityId && !!facilityId,
     });
 
     const { data: availability, isLoading: isLoadingSlots, isError: isErrorSlots } = useQuery({
-        queryKey: ["facility-slots", communityId, facilityId, fromUtc, toUtc],
-        queryFn: () => getFacilityAvailabilitySlots(communityId!, facilityId!, fromUtc, toUtc),
-        enabled: !!communityId && !!facilityId && !!fromUtc && !!toUtc,
+        queryKey: ["facility-slots", auth.communityId, facilityId, fromUtc, toUtc],
+        queryFn: () => getFacilityAvailabilitySlots(auth.communityId!, facilityId!, fromUtc, toUtc),
+        enabled: !!auth.communityId && !!facilityId && !!fromUtc && !!toUtc,
+    });
+
+    const createBooking = useMutation({
+        mutationFn: (payload: any) => createFacilityBooking(auth.communityId!, facilityId!, payload),
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ["facility-slots", auth.communityId, facilityId] });
+            setSelectedSlot(null);
+            setNotes("");
+            setAdminUnitId("");
+            
+            if (data.status === "PendingApproval") {
+                toast.success("Reserva enviada para aprobación de la administración.");
+            } else {
+                toast.success("Reserva confirmada exitosamente.");
+            }
+        },
+        onError: (error: any) => {
+            const msg = error.response?.data?.message || error.response?.data?.title || "Error desconocido";
+            toast.error(`No se pudo reservar: ${msg}`);
+        }
     });
 
     const handleSlotClick = (slot: AvailabilitySlotDto) => {
         if (slot.status === "Free") {
             setSelectedSlot(slot);
         }
+    };
+
+    const handleBookingSubmit = () => {
+        if (!selectedSlot) return;
+        
+        const payload = {
+            startAtUtc: selectedSlot.startAtUtc,
+            endAtUtc: selectedSlot.endAtUtc,
+            notes: notes.trim() || undefined,
+            unitId: isAdminOrCommittee ? (adminUnitId.trim() || undefined) : (auth.unitId || undefined)
+        };
+
+        createBooking.mutate(payload);
     };
 
     if (isLoadingFacility) return <div className="p-4">Cargando detalles...</div>;
@@ -104,7 +145,7 @@ export default function FacilityDetailPage() {
                                         value={selectedDateStr} 
                                         onChange={(e) => {
                                             setSelectedDateStr(e.target.value);
-                                            setSelectedSlot(null); // Reset selection on day change
+                                            setSelectedSlot(null);
                                         }} 
                                         className="w-auto"
                                     />
@@ -150,11 +191,11 @@ export default function FacilityDetailPage() {
                 <div className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Reserva</CardTitle>
+                            <CardTitle>Generar Reserva</CardTitle>
                         </CardHeader>
                         <CardContent>
                             {selectedSlot ? (
-                                <div className="space-y-4">
+                                <div className="space-y-5">
                                     <div className="bg-muted/50 p-4 rounded-lg space-y-2 border">
                                         <p className="text-sm text-muted-foreground">Turno seleccionado</p>
                                         <p className="font-semibold text-lg flex items-center gap-2">
@@ -162,14 +203,64 @@ export default function FacilityDetailPage() {
                                             {formatTime(selectedSlot.startAtUtc)} - {formatTime(selectedSlot.endAtUtc)}
                                         </p>
                                     </div>
-                                    <Button className="w-full gap-2 mt-4" size="lg">
+
+                                    <div className="bg-muted/30 p-4 rounded-lg space-y-2 border text-sm">
+                                        <p className="font-medium flex items-center gap-2">
+                                            <Info className="w-4 h-4 text-muted-foreground" />
+                                            Condiciones de reserva
+                                        </p>
+                                        <ul className="space-y-1 mt-2 text-muted-foreground">
+                                            <li>• Modo de cobro: <strong>{facility.chargingMode}</strong></li>
+                                            {(facility.chargingMode === "Paid" || facility.chargingMode === "PaidAndDeposit") && facility.rentAmount && (
+                                                <li>• Costo alquiler: <strong>${facility.rentAmount}</strong></li>
+                                            )}
+                                            {(facility.chargingMode === "Deposit" || facility.chargingMode === "PaidAndDeposit") && facility.depositAmount && (
+                                                <li>• Depósito exigido: <strong>${facility.depositAmount}</strong></li>
+                                            )}
+                                            {facility.requiresApproval && (
+                                                <li className="text-amber-600 dark:text-amber-500 font-medium">
+                                                    • Requiere aprobación de la administración.
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
+
+                                    <div className="space-y-4 pt-2 border-t">
+                                        <div>
+                                            <label className="text-sm font-medium mb-1.5 block">Notas (opcional)</label>
+                                            <textarea 
+                                                className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                                placeholder="Comentarios adicionales..."
+                                                value={notes}
+                                                onChange={e => setNotes(e.target.value)}
+                                                disabled={createBooking.isPending}
+                                            />
+                                        </div>
+
+                                        {isAdminOrCommittee && (
+                                            <div>
+                                                <label className="text-sm font-medium mb-1.5 block text-primary">Unidad (Committee/Admin)</label>
+                                                <Input 
+                                                    placeholder="Ej: Depto 101" 
+                                                    value={adminUnitId}
+                                                    onChange={e => setAdminUnitId(e.target.value)}
+                                                    disabled={createBooking.isPending}
+                                                    required
+                                                />
+                                                <p className="text-xs text-muted-foreground mt-1.5">Como administrador, debes especificar para qué unidad es esta reserva.</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <Button 
+                                        className="w-full gap-2 mt-2" 
+                                        size="lg" 
+                                        onClick={handleBookingSubmit}
+                                        disabled={createBooking.isPending || (isAdminOrCommittee && !adminUnitId.trim())}
+                                    >
                                         <CalendarPlus className="w-4 h-4" />
-                                        Comenzar reserva
+                                        {createBooking.isPending ? "Procesando..." : "Confirmar Reserva"}
                                     </Button>
-                                    <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-                                        <Info className="w-3 h-3" />
-                                        La reserva no se confirma inmediatamente si requiere aprobación.
-                                    </p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
@@ -177,7 +268,7 @@ export default function FacilityDetailPage() {
                                         <CalendarIcon className="w-6 h-6 text-muted-foreground" />
                                     </div>
                                     <p className="text-sm text-muted-foreground max-w-[200px]">
-                                        Selecciona un turno libre en la agenda para comenzar.
+                                        Selecciona un turno libre en la agenda para reservar.
                                     </p>
                                 </div>
                             )}
