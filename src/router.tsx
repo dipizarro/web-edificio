@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import LoginPage from "./page/LoginPage";
 import FacilitiesPage from "./page/FacilitiesPage";
+import FacilityDetailPage from "./page/FacilityDetailPage";
 import ForbiddenPage from "./page/ForbiddenPage";
 import MyBookingsPage from "./page/MyBookingsPage";
 import AdminBookingsPage from "./page/AdminBookingsPage";
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
         ),
         children: [
             { path: "facilities", element: <FacilitiesPage /> },
+            { path: "facilities/:facilityId", element: <FacilityDetailPage /> },
             { path: "bookings/my", element: <MyBookingsPage /> },
             { 
                path: "admin/bookings", 
