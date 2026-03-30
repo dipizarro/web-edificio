@@ -4,6 +4,7 @@ import FacilitiesPage from "./page/FacilitiesPage";
 import FacilityDetailPage from "./page/FacilityDetailPage";
 import ForbiddenPage from "./page/ForbiddenPage";
 import MyBookingsPage from "./page/MyBookingsPage";
+import BookingDetailPage from "./page/BookingDetailPage";
 import AdminBookingsPage from "./page/AdminBookingsPage";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppShell } from "./components/layout/AppShell";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
             { path: "facilities", element: <FacilitiesPage /> },
             { path: "facilities/:facilityId", element: <FacilityDetailPage /> },
             { path: "bookings/my", element: <MyBookingsPage /> },
+            { path: "bookings/:bookingId", element: <BookingDetailPage /> },
             { 
                path: "admin/bookings", 
                element: (
