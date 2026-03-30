@@ -1,8 +1,8 @@
 import { api } from "./client";
 
 export interface CreateFacilityBookingRequest {
-    startAtUtc: string;
-    endAtUtc: string;
+    startAt: string;
+    endAt: string;
     notes?: string;
     unitId?: string;
 }

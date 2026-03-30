@@ -5,11 +5,14 @@ import { useAuth } from "@/auth/AuthProvider";
 import { hasRole } from "@/auth/authStore";
 import { getFacilityById, getFacilityAvailabilitySlots } from "@/api/facilities";
 import type { AvailabilitySlotDto } from "@/api/facilities";
+import { getUnits } from "@/api/units";
+import type { UnitDto } from "@/api/units";
 import { createFacilityBooking } from "@/api/bookings";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -60,6 +63,12 @@ export default function FacilityDetailPage() {
         enabled: !!auth.communityId && !!facilityId && !!fromUtc && !!toUtc,
     });
 
+    const { data: units, isLoading: isLoadingUnits } = useQuery({
+        queryKey: ["units", auth.communityId],
+        queryFn: () => getUnits(auth.communityId!),
+        enabled: !!auth.communityId && isAdminOrCommittee,
+    });
+
     const createBooking = useMutation({
         mutationFn: (payload: any) => createFacilityBooking(auth.communityId!, facilityId!, payload),
         onSuccess: (data) => {
@@ -90,8 +99,8 @@ export default function FacilityDetailPage() {
         if (!selectedSlot) return;
         
         const payload = {
-            startAtUtc: selectedSlot.startAtUtc,
-            endAtUtc: selectedSlot.endAtUtc,
+            startAt: selectedSlot.startAtUtc,
+            endAt: selectedSlot.endAtUtc,
             notes: notes.trim() || undefined,
             unitId: isAdminOrCommittee ? (adminUnitId.trim() || undefined) : (auth.unitId || undefined)
         };
@@ -240,13 +249,22 @@ export default function FacilityDetailPage() {
                                         {isAdminOrCommittee && (
                                             <div>
                                                 <label className="text-sm font-medium mb-1.5 block text-primary">Unidad (Committee/Admin)</label>
-                                                <Input 
-                                                    placeholder="Ej: Depto 101" 
-                                                    value={adminUnitId}
-                                                    onChange={e => setAdminUnitId(e.target.value)}
-                                                    disabled={createBooking.isPending}
-                                                    required
-                                                />
+                                                <Select 
+                                                    value={adminUnitId} 
+                                                    onValueChange={(val) => setAdminUnitId(val || "")} 
+                                                    disabled={createBooking.isPending || isLoadingUnits}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder={isLoadingUnits ? "Cargando unidades..." : "Seleccione una unidad"} />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {units?.map((unit: UnitDto) => (
+                                                            <SelectItem key={unit.id} value={unit.id}>
+                                                                {unit.number}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                                 <p className="text-xs text-muted-foreground mt-1.5">Como administrador, debes especificar para qué unidad es esta reserva.</p>
                                             </div>
                                         )}
