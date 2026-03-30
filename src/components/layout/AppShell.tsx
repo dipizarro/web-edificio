@@ -44,17 +44,19 @@ export function AppShell() {
                                             }
                                         />
                                     </SidebarMenuItem>
-                                    <SidebarMenuItem>
-                                        <SidebarMenuButton 
-                                            isActive={location.pathname.startsWith("/bookings/my")}
-                                            render={
-                                                <Link to="/bookings/my">
-                                                    <Calendar className="mr-2 h-4 w-4" />
-                                                    <span>My Bookings</span>
-                                                </Link>
-                                            }
-                                        />
-                                    </SidebarMenuItem>
+                                    {!isAdminOrCommittee && (
+                                        <SidebarMenuItem>
+                                            <SidebarMenuButton 
+                                                isActive={location.pathname.startsWith("/bookings/my")}
+                                                render={
+                                                    <Link to="/bookings/my">
+                                                        <Calendar className="mr-2 h-4 w-4" />
+                                                        <span>My Bookings</span>
+                                                    </Link>
+                                                }
+                                            />
+                                        </SidebarMenuItem>
+                                    )}
                                     {isAdminOrCommittee && (
                                         <SidebarMenuItem>
                                             <SidebarMenuButton 

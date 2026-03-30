@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
-import { getBookingById, cancelBooking } from "@/api/bookings";
+import { getBookingById, cancelBooking, approveBooking, rejectBooking, completeBooking } from "@/api/bookings";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, Trash2, Calendar, MapPin, Clock, Home, AlertCircle } from "lucide-react";
+import { ChevronLeft, Trash2, Calendar, MapPin, Clock, Home, AlertCircle, CheckCircle, XCircle, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/auth/AuthProvider";
 import { hasRole } from "@/auth/authStore";
@@ -25,6 +25,7 @@ const getStatusBadge = (status: string) => {
         case "PendingApproval": return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Pendiente</Badge>;
         case "Cancelled": return <Badge variant="destructive">Cancelada</Badge>;
         case "Rejected": return <Badge variant="destructive">Rechazada</Badge>;
+        case "Completed": return <Badge variant="default" className="bg-blue-600">Completada</Badge>;
         default: return <Badge variant="outline">{status}</Badge>;
     }
 };
@@ -38,7 +39,11 @@ export default function BookingDetailPage() {
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
 
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState("");
+
     const isAuthorizedRole = hasRole(auth, "Resident") || hasRole(auth, "Committee") || hasRole(auth, "Admin");
+    const isAdminOrCommittee = hasRole(auth, "Committee") || hasRole(auth, "Admin");
 
     const { data: booking, isLoading, isError } = useQuery({
         queryKey: ["booking", bookingId],
@@ -46,38 +51,90 @@ export default function BookingDetailPage() {
         enabled: !!bookingId,
     });
 
+    const invalidateGlobalCache = () => {
+        queryClient.invalidateQueries({ queryKey: ["booking", bookingId] });
+        queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
+        queryClient.invalidateQueries({ queryKey: ["community-bookings"] });
+        if (booking?.facilityId) {
+            queryClient.invalidateQueries({ queryKey: ["facility-slots", auth.communityId, booking.facilityId] });
+        }
+    };
+
     const cancelMutation = useMutation({
         mutationFn: (reason: string) => cancelBooking(bookingId!, reason),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["booking", bookingId] });
-            queryClient.invalidateQueries({ queryKey: ["my-bookings"] });
+            invalidateGlobalCache();
             setCancelDialogOpen(false);
             setCancelReason("");
             toast.success("La reserva ha sido cancelada exitosamente.");
         },
         onError: (error: any) => {
-            const msg = error.response?.data?.message || error.response?.data?.title || "No se pudo cancelar la reserva.";
-            toast.error(msg);
+            toast.error(error.response?.data?.message || "No se pudo cancelar la reserva.");
+        }
+    });
+
+    const approveMutation = useMutation({
+        mutationFn: () => approveBooking(auth.communityId!, booking!.facilityId, bookingId!),
+        onSuccess: () => {
+            invalidateGlobalCache();
+            toast.success("Reserva aprobada con éxito.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Error al aprobar la reserva.");
+        }
+    });
+
+    const rejectMutation = useMutation({
+        mutationFn: (reason: string) => rejectBooking(auth.communityId!, booking!.facilityId, bookingId!, reason),
+        onSuccess: () => {
+            invalidateGlobalCache();
+            setRejectDialogOpen(false);
+            setRejectReason("");
+            toast.success("Reserva rechazada y cupo liberado.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Error al rechazar la reserva.");
+        }
+    });
+
+    const completeMutation = useMutation({
+        mutationFn: () => completeBooking(bookingId!),
+        onSuccess: () => {
+            invalidateGlobalCache();
+            toast.success("Reserva marcada como completada exitosamente.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Error al completar la reserva.");
         }
     });
 
     const handleCancelSubmit = () => {
         if (!cancelReason.trim()) {
-            toast.error("Debe ingresar de manera obligatoria el motivo de la cancelación.");
+            toast.error("Debe ingresar un motivo.");
             return;
         }
         cancelMutation.mutate(cancelReason.trim());
     };
 
+    const handleRejectSubmit = () => {
+        if (!rejectReason.trim()) {
+            toast.error("Debe ingresar el motivo de rechazo obligatoriamente.");
+            return;
+        }
+        rejectMutation.mutate(rejectReason.trim());
+    };
+
     if (isLoading) return <div className="p-8 text-center text-muted-foreground">Cargando detalles de la reserva...</div>;
-    if (isError || !booking) return <div className="p-8 text-center text-destructive">Error al cargar la reserva solicitada. Puede que no exista o no tenga los permisos suficientes.</div>;
+    if (isError || !booking) return <div className="p-8 text-center text-destructive">Error al cargar la reserva solicitada.</div>;
 
     const canCancel = (booking.status === "Approved" || booking.status === "PendingApproval") && isAuthorizedRole;
+    const isPendingAdminFlow = isAdminOrCommittee && booking.status === "PendingApproval";
+    const isApprovedAdminFlow = isAdminOrCommittee && booking.status === "Approved";
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto p-4">
             <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate("/bookings/my")}>
+                <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
                     <ChevronLeft className="h-5 w-5" />
                 </Button>
                 <div>
@@ -133,7 +190,7 @@ export default function BookingDetailPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div>
-                                <p className="text-sm font-medium text-muted-foreground">Notas enviadas al solicitar</p>
+                                <p className="text-sm font-medium text-muted-foreground">Notas adjuntas</p>
                                 <p className="text-sm mt-1">{booking.notes || <span className="text-muted-foreground italic">"Sin comentarios adicionales."</span>}</p>
                             </div>
 
@@ -175,12 +232,58 @@ export default function BookingDetailPage() {
                         </Card>
                     )}
 
-                    {canCancel && (
+                    {isPendingAdminFlow && (
+                        <Card className="border-primary/50 border-2 shadow-sm bg-primary/5">
+                            <CardContent className="p-4">
+                                <p className="font-semibold text-primary mb-3 text-center sm:text-left">Gestión de Aprobación</p>
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    <Button 
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white" 
+                                        onClick={() => approveMutation.mutate()}
+                                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                                    >
+                                        <CheckCircle className="w-4 h-4 mr-2" />
+                                        Aprobar
+                                    </Button>
+                                    <Button 
+                                        variant="destructive" 
+                                        className="w-full" 
+                                        onClick={() => setRejectDialogOpen(true)}
+                                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                                    >
+                                        <XCircle className="w-4 h-4 mr-2" />
+                                        Rechazar
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {isApprovedAdminFlow && (
+                        <Card className="border-blue-500/50 border-2 shadow-sm bg-blue-500/5 dark:bg-blue-900/10 dark:border-blue-900">
+                            <CardContent className="p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-blue-700 dark:text-blue-400">Finalizar Reserva</p>
+                                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80">Marcar como procesada una vez terminada.</p>
+                                </div>
+                                <Button 
+                                    className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto" 
+                                    onClick={() => completeMutation.mutate()}
+                                    disabled={completeMutation.isPending}
+                                >
+                                    <CheckSquare className="w-4 h-4 mr-2" />
+                                    Completar
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {(!isAdminOrCommittee && canCancel) && (
                         <Card className="border-destructive/30 border-2 shadow-sm">
                             <CardContent className="p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
                                 <div>
                                     <p className="font-semibold text-destructive">¿Deseas cancelar?</p>
-                                    <p className="text-xs text-muted-foreground">Podría incurrir en una multa dependiendo de la anticipación de tu cancelación respecto al horario de la reserva.</p>
+                                    <p className="text-xs text-muted-foreground">Precaución: Sujeto a políticas de multa.</p>
                                 </div>
                                 <Button variant="destructive" onClick={() => setCancelDialogOpen(true)}>
                                     <Trash2 className="w-4 h-4 mr-2" />
@@ -197,23 +300,44 @@ export default function BookingDetailPage() {
                     <DialogHeader>
                         <DialogTitle>Cancelar Reserva Permanentemente</DialogTitle>
                         <DialogDescription>
-                            Indica el motivo por el cual estás cancelando esta reserva. La administración será notificada y esta acción liberará el cupo de inmediato.
+                            Indica el motivo por el cual estás cancelando esta reserva.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
                         <Textarea 
-                            placeholder="Ej: Cambio de planes, indisposición médica..." 
+                            placeholder="Motivo..." 
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
-                            disabled={cancelMutation.isPending}
                         />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={cancelMutation.isPending}>
-                            Volver
-                        </Button>
+                        <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>Volver</Button>
                         <Button variant="destructive" onClick={handleCancelSubmit} disabled={cancelMutation.isPending || !cancelReason.trim()}>
                             {cancelMutation.isPending ? "Cancelando..." : "Confirmar Cancelación"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Rechazar Reserva</DialogTitle>
+                        <DialogDescription>
+                            El residente será notificado del rechazo. Debe indicar estrictamente el motivo para la auditoría y transparencia.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Textarea 
+                            placeholder="Ej: Choque de uso, unidad morosa..." 
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Volver</Button>
+                        <Button variant="destructive" onClick={handleRejectSubmit} disabled={rejectMutation.isPending || !rejectReason.trim()}>
+                            {rejectMutation.isPending ? "Rechazando..." : "Confirmar Rechazo"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

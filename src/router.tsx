@@ -22,7 +22,14 @@ export const router = createBrowserRouter([
         children: [
             { path: "facilities", element: <FacilitiesPage /> },
             { path: "facilities/:facilityId", element: <FacilityDetailPage /> },
-            { path: "bookings/my", element: <MyBookingsPage /> },
+            { 
+               path: "bookings/my", 
+               element: (
+                   <ProtectedRoute roles={["Resident"]}>
+                       <MyBookingsPage />
+                   </ProtectedRoute>
+               )
+            },
             { path: "bookings/:bookingId", element: <BookingDetailPage /> },
             { 
                path: "admin/bookings", 

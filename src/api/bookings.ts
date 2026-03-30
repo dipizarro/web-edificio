@@ -29,11 +29,11 @@ export interface BookingListDto {
     startAtUtc: string;
     endAtUtc: string;
     status: string;
+    unitNumber?: string;
 }
 
 export interface BookingDetailDto extends BookingListDto {
     unitId: string;
-    unitNumber: string;
     notes?: string;
     rejectReason?: string;
     cancelReason?: string;
@@ -63,4 +63,34 @@ export async function getBookingById(bookingId: string): Promise<BookingDetailDt
 
 export async function cancelBooking(bookingId: string, reason: string): Promise<void> {
     await api.post(`/api/bookings/${bookingId}/cancel`, { reason });
+}
+
+export interface GetCommunityBookingsParams {
+    from?: string;
+    to?: string;
+    status?: string | "All";
+    facilityId?: string | "All";
+}
+
+export async function getCommunityBookings(communityId: string, params: GetCommunityBookingsParams): Promise<BookingListDto[]> {
+    const searchParams = new URLSearchParams();
+    if (params.from) searchParams.append("from", params.from);
+    if (params.to) searchParams.append("to", params.to);
+    if (params.status && params.status !== "All") searchParams.append("status", params.status);
+    if (params.facilityId && params.facilityId !== "All") searchParams.append("facilityId", params.facilityId);
+
+    const response = await api.get(`/api/communities/${communityId}/bookings?${searchParams.toString()}`);
+    return response.data;
+}
+
+export async function approveBooking(communityId: string, facilityId: string, bookingId: string): Promise<void> {
+    await api.post(`/api/communities/${communityId}/facilities/${facilityId}/bookings/${bookingId}/approve`);
+}
+
+export async function rejectBooking(communityId: string, facilityId: string, bookingId: string, reason: string): Promise<void> {
+    await api.post(`/api/communities/${communityId}/facilities/${facilityId}/bookings/${bookingId}/reject`, { reason });
+}
+
+export async function completeBooking(bookingId: string): Promise<void> {
+    await api.post(`/api/bookings/${bookingId}/complete`);
 }
