@@ -13,7 +13,7 @@ import {
     SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, Calendar, ShieldAlert } from "lucide-react";
+import { LogOut, Home, Calendar, ShieldAlert, ReceiptText, Users } from "lucide-react";
 
 export function AppShell() {
     const auth = useAuth();
@@ -45,30 +45,56 @@ export function AppShell() {
                                         />
                                     </SidebarMenuItem>
                                     {!isAdminOrCommittee && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton 
-                                                isActive={location.pathname.startsWith("/bookings/my")}
-                                                render={
-                                                    <Link to="/bookings/my">
-                                                        <Calendar className="mr-2 h-4 w-4" />
-                                                        <span>My Bookings</span>
-                                                    </Link>
-                                                }
-                                            />
-                                        </SidebarMenuItem>
+                                        <>
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton 
+                                                    isActive={location.pathname.startsWith("/bookings/my")}
+                                                    render={
+                                                        <Link to="/bookings/my">
+                                                            <Calendar className="mr-2 h-4 w-4" />
+                                                            <span>My Bookings</span>
+                                                        </Link>
+                                                    }
+                                                />
+                                            </SidebarMenuItem>
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton 
+                                                    isActive={location.pathname.startsWith("/my-statement")}
+                                                    render={
+                                                        <Link to="/my-statement">
+                                                            <ReceiptText className="mr-2 h-4 w-4" />
+                                                            <span>Mi Statement</span>
+                                                        </Link>
+                                                    }
+                                                />
+                                            </SidebarMenuItem>
+                                        </>
                                     )}
                                     {isAdminOrCommittee && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton 
-                                                isActive={location.pathname.startsWith("/admin/bookings")}
-                                                render={
-                                                    <Link to="/admin/bookings">
-                                                        <ShieldAlert className="mr-2 h-4 w-4" />
-                                                        <span>Admin Bookings</span>
-                                                    </Link>
-                                                }
-                                            />
-                                        </SidebarMenuItem>
+                                        <>
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton 
+                                                    isActive={location.pathname.startsWith("/admin/bookings")}
+                                                    render={
+                                                        <Link to="/admin/bookings">
+                                                            <ShieldAlert className="mr-2 h-4 w-4" />
+                                                            <span>Admin Bookings</span>
+                                                        </Link>
+                                                    }
+                                                />
+                                            </SidebarMenuItem>
+                                            <SidebarMenuItem>
+                                                <SidebarMenuButton 
+                                                    isActive={location.pathname.startsWith("/admin/statements")}
+                                                    render={
+                                                        <Link to="/admin/statements">
+                                                            <Users className="mr-2 h-4 w-4" />
+                                                            <span>Statements</span>
+                                                        </Link>
+                                                    }
+                                                />
+                                            </SidebarMenuItem>
+                                        </>
                                     )}
                                 </SidebarMenu>
                             </SidebarGroupContent>
