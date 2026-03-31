@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { hasRole } from "@/auth/authStore";
-import { getFacilityById, getFacilityAvailabilitySlots } from "@/api/facilities";
+import { getFacilityById, getFacilityAvailabilitySlots, deactivateFacility } from "@/api/facilities";
 import type { AvailabilitySlotDto } from "@/api/facilities";
 import { getUnits } from "@/api/units";
 import type { UnitDto } from "@/api/units";
@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getFacilityBlocks, createFacilityBlock, deactivateFacilityBlock } from "@/api/blocks";
 import type { FacilityBlockDto } from "@/api/blocks";
-import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock, Lock, ShieldAlert, Edit } from "lucide-react";
+import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock, Lock, ShieldAlert, Edit, Trash2, Users, Ban, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -130,6 +130,24 @@ export default function FacilityDetailPage() {
         }
     });
 
+    const deactivateFacilityMutation = useMutation({
+        mutationFn: () => deactivateFacility(auth.communityId!, facilityId!),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["facility", auth.communityId, facilityId] });
+            queryClient.invalidateQueries({ queryKey: ["facilities", auth.communityId] });
+            toast.success("La instalación ha sido desactivada y ya no recibirá nuevas reservas.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Error al desactivar la instalación.");
+        }
+    });
+
+    const handleDeactivateFacility = () => {
+        if (window.confirm(`¿Está seguro que desea desactivar "${facility?.name}"? Esta acción no se puede deshacer desde la UI.`)) {
+            deactivateFacilityMutation.mutate();
+        }
+    };
+
     const handleSlotClick = (slot: AvailabilitySlotDto) => {
         if (slot.status === "Free") {
             setSelectedSlot(slot);
@@ -193,19 +211,116 @@ export default function FacilityDetailPage() {
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight">{facility.name}</h1>
                         <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                            <Badge variant="outline">{facility.chargingMode}</Badge>
+                            <Badge variant={facility.isActive ? "default" : "outline"} className={facility.isActive ? "bg-green-600" : ""}>
+                                {facility.isActive ? "Activo" : "Fuera de Servicio"}
+                            </Badge>
                             <span>&bull;</span>
-                            <Clock className="w-4 h-4" />
-                            <span>Turnos de {facility.slotDurationMinutes} min</span>
+                            <Badge variant="secondary">{facility.chargingMode}</Badge>
+                            {facility.requiresApproval && (
+                                <Badge variant="outline" className="text-destructive border-destructive/30">Requiere Aprobación</Badge>
+                            )}
                         </div>
                     </div>
                 </div>
-                {isAdminOrCommittee && (
-                    <Button variant="outline" onClick={() => navigate(`/facilities/${facility.id}/edit`)}>
-                        <Edit className="w-4 h-4 mr-2" /> Editar Instalación
-                    </Button>
-                )}
+                <div className="flex items-center gap-2">
+                    {isAdminOrCommittee && (
+                        <>
+                            <Button variant="outline" size="sm" onClick={() => navigate(`/facilities/${facility.id}/edit`)}>
+                                <Edit className="w-4 h-4 mr-2" /> Editar
+                            </Button>
+                            {facility.isActive && (
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-destructive hover:bg-destructive/10"
+                                    onClick={handleDeactivateFacility}
+                                    disabled={deactivateFacilityMutation.isPending}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" /> Desactivar
+                                </Button>
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
+
+            {!facility.isActive && (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive">
+                    <Ban className="w-5 h-5 mt-0.5" />
+                    <div>
+                        <p className="font-bold">Instalación fuera de servicio</p>
+                        <p className="text-sm opacity-90">Esta instalación ha sido desactivada por la administración. No se permiten nuevas reservas en este momento.</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="bg-muted/30">
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-2 bg-primary/10 rounded-full text-primary">
+                            <Users className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Capacidad</p>
+                            <p className="text-lg font-bold">{facility.capacity || "N/A"}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-muted/30">
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-2 bg-primary/10 rounded-full text-primary">
+                            <Clock className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Turnos</p>
+                            <p className="text-lg font-bold">{facility.slotDurationMinutes} min</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-muted/30">
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-2 bg-primary/10 rounded-full text-primary">
+                            <DollarSign className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Arriendo</p>
+                            <p className="text-lg font-bold">
+                                {facility.chargingMode.includes("Paid") ? `$${facility.rentAmountClp}` : "Gratis"}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-muted/30">
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="p-2 bg-primary/10 rounded-full text-primary">
+                            <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Garantía</p>
+                            <p className="text-lg font-bold">
+                                {facility.chargingMode.includes("Deposit") ? `$${facility.depositAmountClp}` : "No aplica"}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {facility.description && (
+                <Card>
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                            <Info className="w-4 h-4" />
+                            Descripción y Reglamento
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground whitespace-pre-wrap">{facility.description}</p>
+                    </CardContent>
+                </Card>
+            )}
 
             <Tabs defaultValue="reservas" className="w-full">
                 {isAdminOrCommittee && (
@@ -312,6 +427,13 @@ export default function FacilityDetailPage() {
                                         </ul>
                                     </div>
 
+                                    {!facility.isActive && (
+                                        <div className="bg-destructive/10 p-3 rounded border border-destructive/20 text-destructive text-xs flex gap-2">
+                                            <Ban className="w-4 h-4 shrink-0" />
+                                            Esta instalación está fuera de servicio. No se pueden generar nuevas reservas por el momento.
+                                        </div>
+                                    )}
+
                                     <div className="space-y-4 pt-2 border-t">
                                         <div>
                                             <label className="text-sm font-medium mb-1.5 block">Notas (opcional)</label>
@@ -352,10 +474,10 @@ export default function FacilityDetailPage() {
                                         className="w-full gap-2 mt-2" 
                                         size="lg" 
                                         onClick={handleBookingSubmit}
-                                        disabled={createBooking.isPending || (isAdminOrCommittee && !adminUnitId.trim())}
+                                        disabled={createBooking.isPending || (isAdminOrCommittee && !adminUnitId.trim()) || !facility.isActive}
                                     >
                                         <CalendarPlus className="w-4 h-4" />
-                                        {createBooking.isPending ? "Procesando..." : "Confirmar Reserva"}
+                                        {!facility.isActive ? "Fuera de Servicio" : createBooking.isPending ? "Procesando..." : "Confirmar Reserva"}
                                     </Button>
                                 </div>
                             ) : (

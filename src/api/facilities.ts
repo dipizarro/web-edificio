@@ -49,6 +49,11 @@ export async function updateFacility(communityId: string, facilityId: string, pa
     return response.data;
 }
 
+export async function deactivateFacility(communityId: string, facilityId: string): Promise<Facility> {
+    const response = await api.post(`/api/communities/${communityId}/facilities/${facilityId}/deactivate`);
+    return response.data;
+}
+
 export interface AvailabilitySlotDto {
     startAtUtc: string;
     endAtUtc: string;
