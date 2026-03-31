@@ -39,3 +39,30 @@ export async function getUnitStatement(communityId: string, unitId: string, peri
     const response = await api.get(`/api/communities/${communityId}/billing/units/${unitId}/statement/${period}`);
     return response.data;
 }
+
+export async function downloadMyStatementPdf(communityId: string, period: string, unitNumber: string): Promise<void> {
+    const response = await api.get(`/api/communities/${communityId}/billing/my-statement/${period}/pdf`, {
+        responseType: 'blob'
+    });
+    
+    triggerBlobDownload(response.data, `CoreEdificio_Statement_${unitNumber}_${period}.pdf`);
+}
+
+export async function downloadUnitStatementPdf(communityId: string, unitId: string, period: string, unitNumber: string): Promise<void> {
+    const response = await api.get(`/api/communities/${communityId}/billing/units/${unitId}/statement/${period}/pdf`, {
+        responseType: 'blob'
+    });
+    
+    triggerBlobDownload(response.data, `CoreEdificio_Statement_${unitNumber}_${period}.pdf`);
+}
+
+function triggerBlobDownload(blobData: Blob, filename: string) {
+    const url = window.URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+}

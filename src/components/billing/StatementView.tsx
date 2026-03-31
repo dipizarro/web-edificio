@@ -2,10 +2,13 @@ import type { UnitStatementDto, StatementLineDto, UnitComponentDto } from "@/api
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Receipt, CalendarDays, Coins, TrendingUp, TrendingDown, Percent, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Receipt, CalendarDays, Coins, TrendingUp, TrendingDown, Percent, FileText, Download } from "lucide-react";
 
 interface StatementViewProps {
     statement: UnitStatementDto;
+    isDownloadingPdf?: boolean;
+    onDownloadPdf?: () => void;
 }
 
 const formatCurrency = (amount: number) => {
@@ -26,7 +29,7 @@ const getLineAmountClass = (type: string) => {
     return "text-red-700 font-medium";
 };
 
-export function StatementView({ statement }: StatementViewProps) {
+export function StatementView({ statement, isDownloadingPdf, onDownloadPdf }: StatementViewProps) {
     if (!statement) return null;
 
     const isOverdue = new Date(statement.dueDate) < new Date() && statement.totalDue > 0;
@@ -43,11 +46,21 @@ export function StatementView({ statement }: StatementViewProps) {
                         <CalendarDays className="w-4 h-4" /> Período: <strong className="text-foreground">{statement.period}</strong>
                     </p>
                 </div>
-                <div className="text-right">
-                    <p className="text-sm font-medium text-muted-foreground">Vencimiento</p>
-                    <Badge variant={isOverdue ? "destructive" : "outline"} className={!isOverdue ? "bg-background text-primary" : ""}>
-                        {formatDate(statement.dueDate)}
-                    </Badge>
+                <div className="flex flex-col items-end gap-2 text-right">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-muted-foreground mr-1">Vencimiento:</span>
+                        <Badge variant={isOverdue ? "destructive" : "outline"} className={!isOverdue ? "bg-background text-primary" : ""}>
+                            {formatDate(statement.dueDate)}
+                        </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {onDownloadPdf && (
+                            <Button size="sm" variant="secondary" onClick={onDownloadPdf} disabled={isDownloadingPdf}>
+                                <Download className="w-4 h-4 mr-2" />
+                                {isDownloadingPdf ? "Generando..." : "Descargar PDF"}
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
 

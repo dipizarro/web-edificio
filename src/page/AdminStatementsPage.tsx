@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getUnitStatement } from "@/api/billing";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { getUnitStatement, downloadUnitStatementPdf } from "@/api/billing";
 import { getUnits } from "@/api/units";
 import { useAuth } from "@/auth/AuthProvider";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatementView } from "@/components/billing/StatementView";
 import { Calendar as CalendarIcon, FileSearch } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { toast } from "sonner";
 
 const getCurrentYearMonth = () => {
     const d = new Date();
@@ -30,6 +31,11 @@ export default function AdminStatementsPage() {
         queryFn: () => getUnitStatement(auth.communityId!, selectedUnitId, period),
         enabled: !!auth.communityId && !!selectedUnitId && !!period,
         retry: false,
+    });
+
+    const downloadMutation = useMutation({
+        mutationFn: () => downloadUnitStatementPdf(auth.communityId!, selectedUnitId, period, statement?.unitNumber || "Unknown"),
+        onError: () => toast.error("Error al generar el PDF del estado de cuenta de esta unidad.")
     });
 
     return (
@@ -94,7 +100,11 @@ export default function AdminStatementsPage() {
                     </CardContent>
                 </Card>
             ) : (
-                <StatementView statement={statement} />
+                <StatementView 
+                    statement={statement} 
+                    isDownloadingPdf={downloadMutation.isPending} 
+                    onDownloadPdf={() => downloadMutation.mutate()} 
+                />
             )}
         </div>
     );
