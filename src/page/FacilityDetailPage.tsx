@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getFacilityBlocks, createFacilityBlock, deactivateFacilityBlock } from "@/api/blocks";
 import type { FacilityBlockDto } from "@/api/blocks";
-import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock, Lock, ShieldAlert } from "lucide-react";
+import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock, Lock, ShieldAlert, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -185,19 +185,26 @@ export default function FacilityDetailPage() {
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate("/facilities")}>
-                    <ChevronLeft className="h-5 w-5" />
-                </Button>
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">{facility.name}</h1>
-                    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                        <Badge variant="outline">{facility.chargingMode}</Badge>
-                        <span>&bull;</span>
-                        <Clock className="w-4 h-4" />
-                        <span>Turnos de {facility.slotDurationMinutes} min</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => navigate("/facilities")}>
+                        <ChevronLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">{facility.name}</h1>
+                        <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                            <Badge variant="outline">{facility.chargingMode}</Badge>
+                            <span>&bull;</span>
+                            <Clock className="w-4 h-4" />
+                            <span>Turnos de {facility.slotDurationMinutes} min</span>
+                        </div>
                     </div>
                 </div>
+                {isAdminOrCommittee && (
+                    <Button variant="outline" onClick={() => navigate(`/facilities/${facility.id}/edit`)}>
+                        <Edit className="w-4 h-4 mr-2" /> Editar Instalación
+                    </Button>
+                )}
             </div>
 
             <Tabs defaultValue="reservas" className="w-full">
@@ -291,11 +298,11 @@ export default function FacilityDetailPage() {
                                         </p>
                                         <ul className="space-y-1 mt-2 text-muted-foreground">
                                             <li>• Modo de cobro: <strong>{facility.chargingMode}</strong></li>
-                                            {(facility.chargingMode === "Paid" || facility.chargingMode === "PaidAndDeposit") && facility.rentAmount && (
-                                                <li>• Costo alquiler: <strong>${facility.rentAmount}</strong></li>
+                                            {(facility.chargingMode === "Paid" || facility.chargingMode === "PaidAndDeposit") && facility.rentAmountClp !== undefined && facility.rentAmountClp !== null && (
+                                                <li>• Costo alquiler: <strong>${facility.rentAmountClp}</strong></li>
                                             )}
-                                            {(facility.chargingMode === "Deposit" || facility.chargingMode === "PaidAndDeposit") && facility.depositAmount && (
-                                                <li>• Depósito exigido: <strong>${facility.depositAmount}</strong></li>
+                                            {(facility.chargingMode === "Deposit" || facility.chargingMode === "PaidAndDeposit") && facility.depositAmountClp !== undefined && facility.depositAmountClp !== null && (
+                                                <li>• Depósito exigido: <strong>${facility.depositAmountClp}</strong></li>
                                             )}
                                             {facility.requiresApproval && (
                                                 <li className="text-amber-600 dark:text-amber-500 font-medium">

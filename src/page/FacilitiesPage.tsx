@@ -3,11 +3,15 @@ import { useAuth } from "@/auth/AuthProvider";
 import { getFacilities } from "@/api/facilities";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, DollarSign, ShieldAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, DollarSign, ShieldAlert, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { hasRole } from "@/auth/authStore";
 
 export default function FacilitiesPage() {
-    const { communityId } = useAuth();
+    const auth = useAuth();
+    const communityId = auth.communityId;
+    const isAdminOrCommittee = hasRole(auth, "Admin") || hasRole(auth, "Committee");
     const navigate = useNavigate();
 
     const { data: facilities, isLoading, isError } = useQuery({
@@ -42,7 +46,15 @@ export default function FacilitiesPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold tracking-tight">Instalaciones</h1>
+            <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-bold tracking-tight">Instalaciones</h1>
+                {isAdminOrCommittee && (
+                    <Button onClick={() => navigate("/facilities/new")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Nueva Instalación
+                    </Button>
+                )}
+            </div>
 
             {facilities?.length === 0 ? (
                 <p className="text-muted-foreground">No hay instalaciones configuradas para este edificio.</p>
@@ -77,17 +89,17 @@ export default function FacilitiesPage() {
                                             <span>Turnos de {facility.slotDurationMinutes} min</span>
                                         </div>
                                         
-                                        {(facility.chargingMode === "Paid" || facility.chargingMode === "PaidAndDeposit") && facility.rentAmount && (
+                                        {(facility.chargingMode === "Paid" || facility.chargingMode === "PaidAndDeposit") && facility.rentAmountClp && (
                                             <div className="flex items-center gap-2">
                                                 <DollarSign className="h-4 w-4" />
-                                                <span>Alquiler: ${facility.rentAmount}</span>
+                                                <span>Alquiler: ${facility.rentAmountClp}</span>
                                             </div>
                                         )}
                                         
-                                        {(facility.chargingMode === "Deposit" || facility.chargingMode === "PaidAndDeposit") && facility.depositAmount && (
+                                        {(facility.chargingMode === "Deposit" || facility.chargingMode === "PaidAndDeposit") && facility.depositAmountClp && (
                                             <div className="flex items-center gap-2">
                                                 <ShieldAlert className="h-4 w-4" />
-                                                <span>Depósito: ${facility.depositAmount}</span>
+                                                <span>Depósito: ${facility.depositAmountClp}</span>
                                             </div>
                                         )}
                                     </div>

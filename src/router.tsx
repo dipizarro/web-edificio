@@ -2,6 +2,8 @@ import { createBrowserRouter } from "react-router-dom";
 import LoginPage from "./page/LoginPage";
 import FacilitiesPage from "./page/FacilitiesPage";
 import FacilityDetailPage from "./page/FacilityDetailPage";
+import FacilityCreatePage from "./page/FacilityCreatePage";
+import FacilityEditPage from "./page/FacilityEditPage";
 import ForbiddenPage from "./page/ForbiddenPage";
 import MyBookingsPage from "./page/MyBookingsPage";
 import BookingDetailPage from "./page/BookingDetailPage";
@@ -23,6 +25,22 @@ export const router = createBrowserRouter([
         ),
         children: [
             { path: "facilities", element: <FacilitiesPage /> },
+            { 
+               path: "facilities/new", 
+               element: (
+                   <ProtectedRoute roles={["Admin", "Committee"]}>
+                       <FacilityCreatePage />
+                   </ProtectedRoute>
+               )
+            },
+            { 
+               path: "facilities/:facilityId/edit", 
+               element: (
+                   <ProtectedRoute roles={["Admin", "Committee"]}>
+                       <FacilityEditPage />
+                   </ProtectedRoute>
+               )
+            },
             { path: "facilities/:facilityId", element: <FacilityDetailPage /> },
             { 
                path: "bookings/my", 

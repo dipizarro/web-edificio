@@ -6,11 +6,27 @@ export interface Facility {
     name: string;
     description?: string;
     chargingMode: "Free" | "Paid" | "Deposit" | "PaidAndDeposit";
-    rentAmount?: number;
-    depositAmount?: number;
+    capacity?: number;
+    rentAmountClp?: number;
+    depositAmountClp?: number;
     requiresApproval: boolean;
     slotDurationMinutes: number;
+    maxHoursPerBooking?: number;
+    maxBookingsPerMonthPerUnit?: number;
     isActive: boolean;
+}
+
+export interface FacilityPayloadDto {
+    name: string;
+    description?: string;
+    capacity?: number;
+    chargingMode: "Free" | "Paid" | "Deposit" | "PaidAndDeposit";
+    rentAmountClp: number;
+    depositAmountClp: number;
+    requiresApproval: boolean;
+    slotDurationMinutes: number;
+    maxHoursPerBooking?: number | null;
+    maxBookingsPerMonthPerUnit?: number | null;
 }
 
 export async function getFacilities(communityId: string): Promise<Facility[]> {
@@ -20,6 +36,16 @@ export async function getFacilities(communityId: string): Promise<Facility[]> {
 
 export async function getFacilityById(communityId: string, facilityId: string): Promise<Facility> {
     const response = await api.get(`/api/communities/${communityId}/facilities/${facilityId}`);
+    return response.data;
+}
+
+export async function createFacility(communityId: string, payload: FacilityPayloadDto): Promise<Facility> {
+    const response = await api.post(`/api/communities/${communityId}/facilities`, payload);
+    return response.data;
+}
+
+export async function updateFacility(communityId: string, facilityId: string, payload: FacilityPayloadDto): Promise<Facility> {
+    const response = await api.put(`/api/communities/${communityId}/facilities/${facilityId}`, payload);
     return response.data;
 }
 
