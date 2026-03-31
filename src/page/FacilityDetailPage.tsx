@@ -13,7 +13,11 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getFacilityBlocks, createFacilityBlock, deactivateFacilityBlock } from "@/api/blocks";
+import type { FacilityBlockDto } from "@/api/blocks";
+import { ChevronLeft, CalendarPlus, Info, Calendar as CalendarIcon, Clock, Lock, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -38,6 +42,10 @@ export default function FacilityDetailPage() {
     const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
     const [notes, setNotes] = useState("");
     const [adminUnitId, setAdminUnitId] = useState("");
+
+    const [blockStartTime, setBlockStartTime] = useState("08:00");
+    const [blockEndTime, setBlockEndTime] = useState("10:00");
+    const [blockReason, setBlockReason] = useState("");
 
     const isAdminOrCommittee = hasRole(auth, "Admin") || hasRole(auth, "Committee");
 
@@ -69,6 +77,12 @@ export default function FacilityDetailPage() {
         enabled: !!auth.communityId && isAdminOrCommittee,
     });
 
+    const { data: blocks, isLoading: isLoadingBlocks, isError: isErrorBlocks } = useQuery({
+        queryKey: ["facility-blocks", auth.communityId, facilityId, fromUtc, toUtc],
+        queryFn: () => getFacilityBlocks(auth.communityId!, facilityId!, fromUtc, toUtc),
+        enabled: !!auth.communityId && !!facilityId && !!fromUtc && !!toUtc && isAdminOrCommittee,
+    });
+
     const createBooking = useMutation({
         mutationFn: (payload: any) => createFacilityBooking(auth.communityId!, facilityId!, payload),
         onSuccess: (data) => {
@@ -89,6 +103,33 @@ export default function FacilityDetailPage() {
         }
     });
 
+    const createBlockMutation = useMutation({
+        mutationFn: (payload: any) => createFacilityBlock(auth.communityId!, facilityId!, payload),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["facility-blocks", auth.communityId, facilityId] });
+            queryClient.invalidateQueries({ queryKey: ["facility-slots", auth.communityId, facilityId] });
+            setBlockStartTime("08:00");
+            setBlockEndTime("10:00");
+            setBlockReason("");
+            toast.success("Bloqueo administrativo registrado. La agenda ha sido actualizada correctamente.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || error.response?.data?.title || "Error al crear bloqueo administrativo.");
+        }
+    });
+
+    const deactivateBlockMutation = useMutation({
+        mutationFn: (blockId: string) => deactivateFacilityBlock(auth.communityId!, facilityId!, blockId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["facility-blocks", auth.communityId, facilityId] });
+            queryClient.invalidateQueries({ queryKey: ["facility-slots", auth.communityId, facilityId] });
+            toast.success("Bloqueo desactivado correctamente. Los turnos han vuelto a ser liberados.");
+        },
+        onError: (error: any) => {
+            toast.error(error.response?.data?.message || "Error al desactivar bloqueo administrativo.");
+        }
+    });
+
     const handleSlotClick = (slot: AvailabilitySlotDto) => {
         if (slot.status === "Free") {
             setSelectedSlot(slot);
@@ -106,6 +147,27 @@ export default function FacilityDetailPage() {
         };
 
         createBooking.mutate(payload);
+    };
+
+    const handleBlockSubmit = () => {
+        if (!blockReason.trim()) {
+            toast.error("Debe ingresar un motivo para el bloqueo administrativo.");
+            return;
+        }
+
+        const blockStartUtc = new Date(`${selectedDateStr}T${blockStartTime}:00`).toISOString();
+        const blockEndUtc = new Date(`${selectedDateStr}T${blockEndTime}:00`).toISOString();
+
+        if (new Date(blockStartUtc) >= new Date(blockEndUtc)) {
+            toast.error("La hora de inicio debe ser anterior a la hora de término.");
+            return;
+        }
+
+        createBlockMutation.mutate({
+            startAtUtc: blockStartUtc,
+            endAtUtc: blockEndUtc,
+            reason: blockReason.trim()
+        });
     };
 
     if (isLoadingFacility) return <div className="p-4">Cargando detalles...</div>;
@@ -138,8 +200,17 @@ export default function FacilityDetailPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
+            <Tabs defaultValue="reservas" className="w-full">
+                {isAdminOrCommittee && (
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="reservas">Agenda de Reservas</TabsTrigger>
+                        <TabsTrigger value="blocks"><ShieldAlert className="w-4 h-4 mr-2" /> Bloqueos Administrativos</TabsTrigger>
+                    </TabsList>
+                )}
+
+                <TabsContent value="reservas">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader className="pb-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -294,6 +365,133 @@ export default function FacilityDetailPage() {
                     </Card>
                 </div>
             </div>
+            </TabsContent>
+
+            {isAdminOrCommittee && (
+                <TabsContent value="blocks">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card>
+                                <CardHeader className="pb-4">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                            <CardTitle>Registro de Bloqueos Activos</CardTitle>
+                                            <CardDescription>Los períodos enlistados aquí no pueden ser reservados bajo ningún rol.</CardDescription>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                                            <Input 
+                                                type="date" 
+                                                value={selectedDateStr} 
+                                                onChange={(e) => setSelectedDateStr(e.target.value)} 
+                                                className="w-auto"
+                                            />
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {isLoadingBlocks ? (
+                                        <div className="py-8 text-center text-muted-foreground">Cargando bloqueos...</div>
+                                    ) : isErrorBlocks ? (
+                                        <div className="py-8 text-center text-destructive">Error al cargar la información.</div>
+                                    ) : !blocks || blocks.length === 0 ? (
+                                        <div className="py-8 text-center text-muted-foreground">No existen bloqueos administrativos planificados para este día.</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Ingreso</TableHead>
+                                                        <TableHead>Vencimiento</TableHead>
+                                                        <TableHead>Motivo</TableHead>
+                                                        <TableHead>Estado</TableHead>
+                                                        <TableHead className="text-right">Acción</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {blocks.map((block: FacilityBlockDto) => (
+                                                        <TableRow key={block.id}>
+                                                            <TableCell className="font-medium">{formatTime(block.startAtUtc)}</TableCell>
+                                                            <TableCell className="font-medium">{formatTime(block.endAtUtc)}</TableCell>
+                                                            <TableCell className="text-muted-foreground">{block.reason}</TableCell>
+                                                            <TableCell>
+                                                                {block.isActive ? (
+                                                                    <Badge variant="destructive" className="bg-red-600">Activo</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-slate-500 border-slate-300">Resuelto</Badge>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-right whitespace-nowrap">
+                                                                {block.isActive && (
+                                                                    <Button 
+                                                                        variant="destructive" 
+                                                                        size="sm"
+                                                                        disabled={deactivateBlockMutation.isPending}
+                                                                        onClick={() => {
+                                                                            if (window.confirm("¿Está seguro que desea desactivar este bloqueo permanentemente?")) {
+                                                                                deactivateBlockMutation.mutate(block.id);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Desmontar
+                                                                    </Button>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            <Card className="border-secondary">
+                                <CardHeader className="bg-secondary/20">
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Lock className="w-5 h-5" /> Instaurar Bloqueo
+                                    </CardTitle>
+                                    <CardDescription>Genera una interrupción no reservable forzando el estado a `Blocked` transversalmente.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="pt-6 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-sm font-medium mb-1 block">Desde (Hora)</label>
+                                            <Input type="time" value={blockStartTime} onChange={e => setBlockStartTime(e.target.value)} disabled={createBlockMutation.isPending} />
+                                        </div>
+                                        <div>
+                                            <label className="text-sm font-medium mb-1 block">Hasta (Hora)</label>
+                                            <Input type="time" value={blockEndTime} onChange={e => setBlockEndTime(e.target.value)} disabled={createBlockMutation.isPending} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium mb-1 block">Motivo Administrativo</label>
+                                        <Input 
+                                            placeholder="Ej: Mantención preventiva..." 
+                                            value={blockReason}
+                                            onChange={e => setBlockReason(e.target.value)}
+                                            disabled={createBlockMutation.isPending}
+                                        />
+                                    </div>
+                                    <Button 
+                                        className="w-full gap-2 mt-2" 
+                                        size="lg" 
+                                        variant="default"
+                                        onClick={handleBlockSubmit}
+                                        disabled={createBlockMutation.isPending || !blockStartTime || !blockEndTime || !blockReason}
+                                    >
+                                        <ShieldAlert className="w-4 h-4" />
+                                        {createBlockMutation.isPending ? "Configurando..." : "Aplicar Restricción"}
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </TabsContent>
+            )}
+            </Tabs>
         </div>
     );
 }
